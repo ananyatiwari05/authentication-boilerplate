@@ -1,20 +1,21 @@
 import express from "express";
 import bodyParser from "body-parser"
 import pg from "pg"
+import bcrypt from "bcrypt";
 
 const app = express();
 const port = 3000;
+const saltRounds = 10;
 
 const db = new pg.Client({
     user: "postgres",
     host: "localhost",
-    database: "auth",
+    database: "users",
     password: "mydatabase",
     port: 5432,
 });
 
 db.connect();
-
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static("public"));
@@ -46,12 +47,20 @@ app.post("/register", async (req, res) => {
             res.send("Email already exists. Try logging in.");
         }
         else {
-            const result = await db.query(
-                "INSERT INTO users_cred (email,password) VALUES ($1, $2)",
-                [email, password]
-            );
-            console.log(result);
-            res.render("profile.ejs");
+            //pasword hashing
+            bcrypt.hash(password, saltRounds, async (err, hash) => {
+                if (err) {
+                    console.log("Error hashing password:", err);
+                }
+                else {
+                    const result = await db.query(
+                        "INSERT INTO users_cred (email,password) VALUES ($1, $2)",
+                        [email, hash]
+                    );
+                    console.log(result);
+                    res.render("profile.ejs");
+                }
+            });
         }
     } catch (err) {
         console.log(err);
@@ -60,28 +69,36 @@ app.post("/register", async (req, res) => {
 
 app.post("/login", async (req, res) => {
     const email = req.body.username;
-    const password = req.body.password;
+    const loginPassword = req.body.password;
 
-    try{
+    try {
         const result = await db.query(
             "SELECT * FROM users_cred WHERE email= $1",
             [email]
         );
 
-        if(result.rows.length >0){
-            const user= result.rows[0];
-            const storedPassword= user.password;
+        if (result.rows.length > 0) {
+            const user = result.rows[0];
+            const storedHashedPassword = user.password;
 
-            if(password === storedPassword){
-                res.render("profile.ejs");
-            }else{
-                res.send("Incorrect password");
-            }
+            bcrypt.compare(loginPassword, storedHashedPassword, (err, result)=>{
+                if(err){
+                    console.log("Error comparing passwords:",err);
+                }
+                else{
+                    if(result){//if true
+                        res.render("profile.ejs");
+                    }
+                    else{
+                        res.send("Incorrect password");
+                    }
+                }
+            });
         }
-        else{
+        else {
             res.send("user not found.");
         }
-    } catch(err){
+    } catch (err) {
         console.log(err);
     }
 });
