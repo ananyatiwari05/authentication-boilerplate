@@ -5,6 +5,7 @@ import bcrypt from "bcrypt";
 import session from "express-session";
 import passport from "passport";
 import { Strategy } from "passport-local";
+import GoogleStrategy from "passport-google-oauth2";
 import env from "dotenv";
 
 const app = express();
@@ -15,7 +16,7 @@ env.config();
 const db = new pg.Client({
     user: process.env.PG_USER,
     host: process.env.PG_HOST,
-    database: process.env.PG_DATABSE,
+    database: process.env.PG_DATABASE,
     password: process.env.PG_PASSWORD,
     port: process.env.PG_PORT,
 });
@@ -29,15 +30,10 @@ app.use(session({
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: true,
-    cookie:{
-        //the time span of a cookie
-        //by default the cookie expires as we close our browser
-        //currently set to 5 hours
+    cookie: {
         maxAge: 1000 * 60 * 60 * 5,
     },
 }));
-
-//passport session after session initialization
 
 app.use(passport.initialize());
 app.use(passport.session());
@@ -54,49 +50,79 @@ app.get("/register", (req, res) => {
     res.render("register.ejs");
 });
 
-app.get("/profile", (req,res)=>{
-    //if we have an active session saved in a cookie
-    //then we can directly show the profile page
-    //instead of repeated logins
+app.get("/logout", (req, res, next) => {
+    req.logout(function (err) {
+        if (err) {
+            return next(err);
+        }
+        res.redirect("/");
+    });
+});
 
-    if(req.isAuthenticated()){
-        res.render("profile.ejs");
-    }
-    else{
+app.get("/profile", async (req, res) => {
+    if (req.isAuthenticated()) {
+        try {
+            const result = await db.query(
+                `SELECT github, linkedin, leetcode, codechef FROM users_cred WHERE email = $1`,
+                [req.user.email]
+            );
+            const user = result.rows[0];
+            res.render("profile.ejs", {
+                github: user.github || null,
+                linkedin: user.linkedin || null,
+                leetcode: user.leetcode || null,
+                codechef: user.codechef || null,
+                codeforces: user.codeforces || null
+            });
+        } catch (err) {
+            console.error(err);
+            res.send("Error loading profile");
+        }
+    } else {
         res.redirect("/login");
     }
 });
+
+app.get("/submit", (req, res) => {
+    if (req.isAuthenticated()) {
+        res.render("profile.ejs");
+    } else {
+        res.redirect("/login");
+    }
+});
+
+app.get("/auth/google", passport.authenticate("google", {
+    scope: ["profile", "email"],
+}));
+
+app.get("/auth/google/userscred",
+    passport.authenticate("google", {
+        successRedirect: "/profile",
+        failureRedirect: "/login",
+    })
+);
 
 app.post("/register", async (req, res) => {
     const email = req.body.username;
     const password = req.body.password;
 
     try {
-        //if the user already registered
-        const checkResult = await db.query(
-            "SELECT * FROM users_cred WHERE email= $1",
-            [email]
-        );
+        const checkResult = await db.query("SELECT * FROM users_cred WHERE email= $1", [email]);
 
         if (checkResult.rows.length > 0) {
-            res.send("Email already exists. Try logging in.");
-        }
-        else {
-            //pasword hashing
+            res.redirect("/login");
+        } else {
             bcrypt.hash(password, saltRounds, async (err, hash) => {
                 if (err) {
                     console.log("Error hashing password:", err);
-                }
-                else {
-                    //getting hold of the credetials entered by the user while registering
+                } else {
                     const result = await db.query(
-                        "INSERT INTO users_cred (email,password) VALUES ($1, $2) RETURNING *",
+                        "INSERT INTO users_cred (email, password) VALUES ($1, $2) RETURNING *",
                         [email, hash]
                     );
-                    const user= result.rows[0];
-                    //req.login() automatically authenticates our user
-                    req.login(user, (err)=>{
-                        console.log(err);
+                    const user = result.rows[0];
+                    req.login(user, (err) => {
+                        if (err) console.log(err);
                         res.redirect("/profile");
                     });
                 }
@@ -107,61 +133,74 @@ app.post("/register", async (req, res) => {
     }
 });
 
-//instead of manual checking we now as passport pkg to do that work for us
-//the strategy used is local
 app.post("/login", passport.authenticate("local", {
-    successRedirect:"/profile",
-    failureRedirect:"/login"
+    successRedirect: "/profile",
+    failureRedirect: "/login"
 }));
 
-
-passport.use(new Strategy(async function verify(username, password, cb){
-    //passwort will automatically grap the username and password
-    //from the login and register routes
-    //and we dont have to manually do it using body-parser
-    
+app.post("/submit", async (req, res) => {
+    const { github, linkedin, leetcode, codechef } = req.body;
     try {
-        const result = await db.query(
-            "SELECT * FROM users_cred WHERE email= $1",
-            [username],
+        await db.query(
+            `UPDATE users_cred SET github = $1, linkedin = $2, leetcode = $3, codechef = $4 WHERE email = $5`,
+            [github, linkedin, leetcode, codechef, req.user.email]
         );
+        res.redirect("/profile");
+    } catch (err) {
+        console.log(err);
+        res.send("Failed to update profile");
+    }
+});
+
+passport.use(new Strategy(async function verify(username, password, cb) {
+    try {
+        const result = await db.query("SELECT * FROM users_cred WHERE email= $1", [username]);
 
         if (result.rows.length > 0) {
             const user = result.rows[0];
             const storedHashedPassword = user.password;
 
-            bcrypt.compare(password, storedHashedPassword, (err, result)=>{
-                if(err){
-                    return cb(err);
-                }
-                else{
-                    if(result){//if true
-                        return cb(null, user);
-                        //(error, value)
-                        //in app.get("/profile")=> it will be set true as user value is passed and profile page will show up
-                    }
-                    else{
-                        return cb(null, false);
-                        //in app.get("/profile")=> it will be set to false and profile page will nt show up
-                    }
-                }
+            bcrypt.compare(password, storedHashedPassword, (err, result) => {
+                if (err) return cb(err);
+                if (result) return cb(null, user);
+                return cb(null, false);
             });
-        }
-        else {
+        } else {
             return cb("User not found");
         }
     } catch (err) {
         return cb(err);
     }
 }));
-//cb-> callback in passport world
 
-//saving the data of the user who logged in inside the local storage
-passport.serializeUser((user, cb) =>{
+passport.use("google", new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: "http://localhost:3000/auth/google/userscred",
+    userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo",
+}, async (accessToken, refreshToken, profile, cb) => {
+    try {
+        const result = await db.query("SELECT * FROM users_cred WHERE email = $1", [profile.email]);
+
+        if (result.rows.length === 0) {
+            const newUser = await db.query(
+                "INSERT INTO users_cred (email, password) VALUES ($1, $2)",
+                [profile.email, "google"]
+            );
+            return cb(null, newUser.rows[0]);
+        } else {
+            return cb(null, result.rows[0]);
+        }
+    } catch (err) {
+        return cb(err);
+    }
+}));
+
+passport.serializeUser((user, cb) => {
     cb(null, user);
 });
 
-passport.deserializeUser((user, cb) =>{
+passport.deserializeUser((user, cb) => {
     cb(null, user);
 });
 
