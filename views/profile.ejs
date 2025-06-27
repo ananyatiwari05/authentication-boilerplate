@@ -1,3 +1,144 @@
 <%- include('partials/header') %>
-<h1>Hello user</h1>
+
+<style>
+  body {
+    background-color: #111;
+    color: #f5f5f5;
+    font-family: "Segoe UI", sans-serif;
+    padding: 2rem;
+  }
+  .container {
+    max-width: 700px;
+    margin: auto;
+  }
+  h1 {
+    font-weight: 700;
+    margin-bottom: 2rem;
+    text-align: center;
+  }
+  .list-group-item {
+    background-color: #1c1c1c;
+    color: #f5f5f5;
+    border: none;
+  }
+  a {
+    color: #79b8ff;
+  }
+</style>
+
+<div class="container">
+  <h1>coder ID card🧑🏻‍💻</h1>
+
+  <h4 class="mb-3">current links:</h4>
+  <ul class="list-group mb-4">
+    <li class="list-group-item">
+      GitHub: <% if (github) { %>
+      <a href="<%= github %>" target="_blank"><%= github %></a>
+      <% } else { %> Not added yet <% } %>
+    </li>
+    <li class="list-group-item">
+      LinkedIn: <% if (linkedin) { %>
+      <a href="<%= linkedin %>" target="_blank"><%= linkedin %></a>
+      <% } else { %> Not added yet <% } %>
+    </li>
+    <li class="list-group-item">
+      LeetCode: <% if (leetcode) { %>
+      <a href="<%= leetcode %>" target="_blank"><%= leetcode %></a>
+      <% } else { %> Not added yet <% } %>
+    </li>
+    <li class="list-group-item">
+      CodeChef: <% if (codechef) { %>
+      <a href="<%= codechef %>" target="_blank"><%= codechef %></a>
+      <% } else { %> Not added yet <% } %>
+    </li>
+    <li class="list-group-item">
+      Codeforces: <% if (codeforces) { %>
+      <a href="<%= codeforces %>" target="_blank"><%= codeforces %></a>
+      <% } else { %> Not added yet <% } %>
+    </li>
+  </ul>
+
+  <div class="text-center">
+    <button
+      class="btn btn-outline-light"
+      data-bs-toggle="modal"
+      data-bs-target="#editModal"
+    >
+      ✏️ Add / Edit Links
+    </button>
+  </div>
+</div>
+
+<!-- Modal -->
+<div
+  class="modal fade"
+  id="editModal"
+  tabindex="-1"
+  aria-labelledby="editModalLabel"
+  aria-hidden="true"
+>
+  <div class="modal-dialog">
+    <div class="modal-content bg-dark text-light">
+      <div class="modal-header">
+        <h5 class="modal-title" id="editModalLabel">Edit Your Links</h5>
+        <button
+          type="button"
+          class="btn-close btn-close-white"
+          data-bs-dismiss="modal"
+          aria-label="Close"
+        ></button>
+      </div>
+      <form action="/submit" method="POST">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="github" class="form-label">GitHub</label>
+            <input
+              type="url"
+              class="form-control"
+              id="github"
+              name="github"
+              value="<%= github || '' %>"
+            />
+          </div>
+          <div class="mb-3">
+            <label for="linkedin" class="form-label">LinkedIn</label>
+            <input
+              type="url"
+              class="form-control"
+              id="linkedin"
+              name="linkedin"
+              value="<%= linkedin || '' %>"
+            />
+          </div>
+          <div class="mb-3">
+            <label for="leetcode" class="form-label">LeetCode</label>
+            <input
+              type="url"
+              class="form-control"
+              id="leetcode"
+              name="leetcode"
+              value="<%= leetcode || '' %>"
+            />
+          </div>
+          <div class="mb-3">
+            <label for="codechef" class="form-label">CodeChef</label>
+            <input
+              type="url"
+              class="form-control"
+              id="codechef"
+              name="codechef"
+              value="<%= codechef || '' %>"
+            />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-light">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
 <%- include('partials/footer') %>

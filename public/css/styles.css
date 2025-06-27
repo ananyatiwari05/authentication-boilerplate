@@ -1,0 +1,19 @@
+body {
+  background-color:black;
+}
+h1{
+  color:white;
+}
+
+.centered {
+    padding-top: 200px;
+    text-align: center;
+}
+
+.card{
+  border-radius:20px;
+}
+
+button :hover {
+  opacity: 0.9;
+}
